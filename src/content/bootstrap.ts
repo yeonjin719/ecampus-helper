@@ -7,7 +7,11 @@
     let inFlight = false;
     let lastCourseSignature = '';
     let autoRefreshTimer = null;
-    const UI_INCLUDE_SM_CLASS_KEY = 'ecdash:smu:ui:includeSmClass';
+    const storagePrefix =
+        (typeof E.getStoragePrefix === 'function'
+            ? E.getStoragePrefix('ecdash:smu')
+            : 'ecdash:smu') || 'ecdash:smu';
+    const UI_INCLUDE_SM_CLASS_KEY = `${storagePrefix}:ui:includeSmClass`;
 
     function setKnownCourses(courses) {
         window.__ECDASH_COURSES__ = E.normalizeCourseCache(courses || []);
@@ -70,9 +74,64 @@
         return includeSmClass;
     }
 
+    function isDashboardPage() {
+        if (typeof E.isDashboardPage === 'function') {
+            return Boolean(E.isDashboardPage());
+        }
+        return Boolean(E.isDashboardSMU?.());
+    }
+
+    function collectDashboardCourses() {
+        if (typeof E.collectDashboardCourses === 'function') {
+            const courses = E.collectDashboardCourses();
+            return Array.isArray(courses) ? courses : [];
+        }
+
+        return E.collectCoursesFromDashboardSMU?.() || [];
+    }
+
+    async function crawlAllDashboardItems(courses) {
+        if (typeof E.crawlAllItemsFromDashboard === 'function') {
+            const items = await E.crawlAllItemsFromDashboard(courses);
+            return Array.isArray(items) ? items : [];
+        }
+
+        const fallback = await E.crawlAllItemsFromDashboardSMU?.(courses);
+        return Array.isArray(fallback) ? fallback : [];
+    }
+
+    function getCurrentCourse() {
+        if (typeof E.getCurrentCourse === 'function') {
+            return E.getCurrentCourse() || null;
+        }
+        return E.getCurrentCourseFromLocation?.() || null;
+    }
+
+    function isProgressPage() {
+        if (typeof E.isProgressPage === 'function') {
+            return Boolean(E.isProgressPage());
+        }
+        return Boolean(E.isUbcompletionProgressPage?.());
+    }
+
+    async function collectProgressPageItems() {
+        if (typeof E.collectProgressPageItems === 'function') {
+            const items = await E.collectProgressPageItems();
+            return Array.isArray(items) ? items : [];
+        }
+
+        const fallback = await E.collectLectureItemsFromCurrentProgressPage?.();
+        return Array.isArray(fallback) ? fallback : [];
+    }
+
     function getCourseSignature() {
-        if (!E.isDashboardSMU()) return '';
-        const courses = E.collectCoursesFromDashboardSMU();
+        const signatureFromAdapter = E.getDashboardCourseSignature?.({
+            includeSmClass: Boolean(E.__includeSmClass),
+        });
+        if (signatureFromAdapter) return signatureFromAdapter;
+
+        if (!isDashboardPage()) return '';
+        const courses = collectDashboardCourses();
         if (!courses.length) return '';
 
         const { courses: visibleCourses } = getFilteredCourseState(
@@ -100,8 +159,8 @@
             const includeSmClass = await loadIncludeSmClassSetting();
 
             let preflightCourses = [];
-            if (E.isDashboardSMU()) {
-                preflightCourses = E.collectCoursesFromDashboardSMU();
+            if (isDashboardPage()) {
+                preflightCourses = collectDashboardCourses();
                 if (preflightCourses.length) {
                     setKnownCourses(preflightCourses);
                 }
@@ -140,9 +199,9 @@
             }
             E.setLoading?.(true, '데이터를 가져오는 중...');
 
-            if (E.isDashboardSMU()) {
+            if (isDashboardPage()) {
                 // 대시보드 과목 목록이 일시적으로 비면 기존 과목 캐시를 대체값으로 사용.
-                const dashboardCourses = E.collectCoursesFromDashboardSMU();
+                const dashboardCourses = collectDashboardCourses();
                 let crawlCourses = [];
                 let excludedCourseIds = new Set();
 
@@ -185,7 +244,7 @@
                     return;
                 }
 
-                const items = await E.crawlAllItemsFromDashboardSMU(crawlCourses);
+                const items = await crawlAllDashboardItems(crawlCourses);
                 const visibleItems = filterItemsByExcludedCourses(
                     items,
                     excludedCourseIds,
@@ -202,7 +261,7 @@
             }
 
             const cached = await E.loadCourseCache();
-            const currentCourse = E.getCurrentCourseFromLocation?.();
+            const currentCourse = getCurrentCourse();
 
             // 비-대시보드 페이지에서는 캐시된 과목 목록을 기준으로 재크롤링.
             // 현재 페이지의 과목 식별자를 우선 반영해 캐시 신선도를 유지.
@@ -340,18 +399,17 @@
 
         E.initVodEnhancements();
 
-        if (E.isVodPlayerPage() && !E.isDashboardSMU()) {
+        if (E.isVodPlayerPage() && !isDashboardPage()) {
             // 동영상 페이지에서는 탭 타이틀 기능만 유지하고 사이드바는 강제로 띄우지 않음.
             return;
         }
 
         E.ensureRoot();
 
-        if (E.isUbcompletionProgressPage?.()) {
+        if (isProgressPage()) {
             E.setLoading?.(true, '온라인출석부 데이터를 가져오는 중...');
             try {
-                const lectureItems =
-                    (await E.collectLectureItemsFromCurrentProgressPage?.()) || [];
+                const lectureItems = await collectProgressPageItems();
                 window.__ECDASH_ITEMS__ = lectureItems;
                 E.setBadge('OK');
                 E.setSub(
@@ -393,7 +451,7 @@
             E.render([]);
         }
 
-        if (E.isDashboardSMU()) {
+        if (isDashboardPage()) {
             lastCourseSignature = getCourseSignature();
             refreshAll({ force: false });
         } else {
@@ -403,7 +461,7 @@
         }
 
         const obs = new MutationObserver(() => {
-            if (!E.isDashboardSMU() || inFlight) return;
+            if (!isDashboardPage() || inFlight) return;
 
             const nextSignature = getCourseSignature();
             if (!nextSignature || nextSignature === lastCourseSignature) return;

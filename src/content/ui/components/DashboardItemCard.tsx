@@ -74,12 +74,6 @@ export function DashboardItemCard({
         .split(/\s*·\s*/)
         .map((value) => String(value || '').trim())
         .filter(Boolean);
-    const dueText =
-        item.type === 'NOTICE'
-            ? ''
-            : item.dueAt
-              ? `마감기간 ${formatDueDate(item.dueAt)}까지`
-              : '';
 
     return (
         <button
@@ -180,12 +174,6 @@ export function DashboardItemCard({
                 </div>
 
                 <div className="flex flex-col gap-0.5">
-                    {dueText && (
-                        <p className="mt-0.5 text-[12px] leading-5 font-medium text-zinc-700">
-                            {dueText}
-                        </p>
-                    )}
-
                     {detailMetaLines.map((line, index) => (
                         <p
                             key={`detail-${item.id}-${index}`}

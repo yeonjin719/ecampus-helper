@@ -27,6 +27,8 @@ export function DashboardContent({
     onToggleCourse,
     onHideItem,
 }: DashboardContentProps) {
+    const onDashboardPage =
+        runtime.isDashboardPage?.() ?? runtime.isDashboardSMU?.();
     const now = Date.now();
     const dueSoonThreshold = now + 3 * 24 * 60 * 60 * 1000;
     const dueSoonCount = filteredItems.filter(
@@ -55,7 +57,7 @@ export function DashboardContent({
 
         return (
             <div className="flex h-[40px] items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-center text-[12px] leading-5 text-zinc-600 shadow-[0_4px_10px_rgba(15,23,42,0.05)]">
-                {runtime.isDashboardSMU?.()
+                {onDashboardPage
                     ? '데이터가 없어요. ↻ 새로고침'
                     : '대시보드에서 사용 가능해요.'}
             </div>

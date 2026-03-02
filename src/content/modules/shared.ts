@@ -1,18 +1,22 @@
 // @ts-nocheck
 (() => {
     const E = (window.__ECDASH__ = window.__ECDASH__ || {});
+    const storagePrefix =
+        (typeof E.getStoragePrefix === 'function'
+            ? E.getStoragePrefix('ecdash:smu')
+            : 'ecdash:smu') || 'ecdash:smu';
 
     // 크롤러, 화면, 동영상 모듈에서 공통으로 쓰는 상수와 순수 유틸 함수.
     E.constants = {
         ROOT_ID: 'ecdash-root',
-        STORAGE_KEY: 'ecdash:smu:lastItems',
-        STORAGE_LAST_RUN: 'ecdash:smu:lastRunAt',
-        STORAGE_COURSES_KEY: 'ecdash:smu:courses',
-        STORAGE_COURSES_LAST_SYNC: 'ecdash:smu:courses:lastSyncAt',
+        STORAGE_KEY: `${storagePrefix}:lastItems`,
+        STORAGE_LAST_RUN: `${storagePrefix}:lastRunAt`,
+        STORAGE_COURSES_KEY: `${storagePrefix}:courses`,
+        STORAGE_COURSES_LAST_SYNC: `${storagePrefix}:courses:lastSyncAt`,
         CRAWL_CONCURRENCY: 3,
-        VOD_AUTO_CLOSE_KEY: 'ecdash:smu:vod:autoClose',
-        VOD_LANG_KEY: 'ecdash:smu:vod:lang',
-        VOD_PLAYBACK_RATE_KEY: 'ecdash:smu:vod:playbackRate',
+        VOD_AUTO_CLOSE_KEY: `${storagePrefix}:vod:autoClose`,
+        VOD_LANG_KEY: `${storagePrefix}:vod:lang`,
+        VOD_PLAYBACK_RATE_KEY: `${storagePrefix}:vod:playbackRate`,
     };
 
     E.TYPE_LABEL = {
