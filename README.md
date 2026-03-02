@@ -131,3 +131,7 @@ npm run build
   - `downloads` 권한이 반영된 `dist/manifest.json`으로 로드됐는지 확인
 - UI가 갱신되지 않으면:
   - `dist/`를 다시 빌드하고 확장프로그램 새로고침
+
+## 라이선스
+
+MIT License ([LICENSE](/Users/kim-yeonjin/Documents/project/ecampus-dashboard-smu/LICENSE))
