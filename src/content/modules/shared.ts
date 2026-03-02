@@ -238,7 +238,7 @@
                 /(\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?\s*[~\-]\s*\d{4}\s*[.\-/]\s*\d{1,2}\s*[.\-/]\s*\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)/,
             );
             if (periodRangeMatch?.[1]) {
-                return `기간 ${E.cleanText(periodRangeMatch[1])}`;
+                return `기간: ${E.cleanText(periodRangeMatch[1])}`;
             }
 
             const keywordMatch = text.match(

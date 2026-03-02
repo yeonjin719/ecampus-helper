@@ -3,8 +3,12 @@
   "name": "SMU eCampus Dashboard",
   "version": "1.0.0",
   "description": "SMU eCampus 과목별 과제/강의/토론/자료를 한눈에 보는 확장 프로그램",
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "downloads"],
   "host_permissions": ["https://ecampus.smu.ac.kr/*"],
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
   "content_scripts": [
     {
       "matches": ["https://ecampus.smu.ac.kr/*"],

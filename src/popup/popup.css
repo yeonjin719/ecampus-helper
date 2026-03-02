@@ -1,4 +1,5 @@
 @tailwind components;
+
 @tailwind utilities;
 
 :root {
@@ -19,8 +20,7 @@ body {
   width: 320px;
   max-height: 560px;
   overflow-y: auto;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(45, 141, 197, 0.4), transparent 45%),
+  background: radial-gradient(circle at 100% 0%, rgba(45, 141, 197, 0.4), transparent 45%),
     radial-gradient(circle at 0% 100%, rgba(102, 185, 154, 0.26), transparent 50%),
     linear-gradient(165deg, var(--popup-bg-0), var(--popup-bg-1) 52%, var(--popup-bg-2));
   color: var(--popup-text);
@@ -30,18 +30,19 @@ body {
   width: 320px;
   max-height: 560px;
   overflow-y: auto;
+  border-radius: 16px;
 }
 
 .popup-shell {
   position: relative;
-  padding: 14px;
+  padding: 30px !important;
   font-family: 'Pretendard', sans-serif;
 }
 
 .popup-shell::before {
   content: '';
   position: absolute;
-  inset: 8px;
+  inset: 14px;
   border-radius: 16px;
   border: 1px solid rgba(196, 214, 239, 0.22);
   pointer-events: none;

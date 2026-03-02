@@ -31,6 +31,27 @@
         return E.cleanText(text.replace(/\s*\bnew\b\s*$/i, ''));
     };
 
+    E.stripCourseDecorators = function stripCourseDecorators(value) {
+        let text = E.cleanText(value || '');
+        if (!text) return '';
+
+        text = text.replace(/^\s*(?:\[[^\]]+\]\s*)+/, '');
+        text = text.replace(/\s*(?:\[[^\]]+\]\s*)+$/, '');
+
+        let prev = '';
+        while (text && prev !== text) {
+            prev = text;
+            text = text.replace(/\s*\([^()]*\)\s*$/, '').trim();
+        }
+
+        return E.cleanText(text);
+    };
+
+    E.cleanCourseDisplayName = function cleanCourseDisplayName(value) {
+        const noNew = E.stripCourseNewToken(value);
+        return E.stripCourseDecorators(noNew) || noNew;
+    };
+
     E.detectCourseTitleHasNewBadge = function detectCourseTitleHasNewBadge(
         courseLinkEl,
     ) {
@@ -60,11 +81,11 @@
                 el.remove();
             });
 
-            const fromClone = E.stripCourseNewToken(clone.textContent);
+            const fromClone = E.cleanCourseDisplayName(clone.textContent);
             if (fromClone) return fromClone;
         }
 
-        return E.stripCourseNewToken(
+        return E.cleanCourseDisplayName(
             E.cleanText(h3?.textContent) || E.cleanText(courseLinkEl.textContent),
         );
     };
@@ -167,7 +188,7 @@
 
                 return {
                     courseId: String(course?.courseId || '').trim(),
-                    courseName: E.stripCourseNewToken(rawCourseName),
+                    courseName: E.cleanCourseDisplayName(rawCourseName),
                     courseLabels,
                     isSmClass,
                     isNew,
@@ -258,7 +279,7 @@
                     '.page-header-headings h1, .coursename h1, .course-title h1, h1',
                 )?.textContent,
             ) || '';
-        const pageCourseName = E.stripCourseNewToken(rawPageCourseName);
+        const pageCourseName = E.cleanCourseDisplayName(rawPageCourseName);
         const isNew = /\bnew\b/i.test(rawPageCourseName);
 
         return {
@@ -268,14 +289,69 @@
         };
     };
 
-    E.fetchHtml = async function fetchHtml(pathOrUrl) {
-        const url = pathOrUrl.startsWith('http')
-            ? pathOrUrl
-            : new URL(pathOrUrl, location.origin).toString();
+    E.getFetchErrorStatus = function getFetchErrorStatus(err) {
+        const msg = String(err?.message || err || '');
+        const m = msg.match(/Fetch failed\s+(\d{3})/i);
+        return m ? Number(m[1]) : null;
+    };
 
-        const res = await fetch(url, { credentials: 'include' });
-        if (!res.ok) throw new Error(`Fetch failed ${res.status}: ${url}`);
-        return await res.text();
+    E.isTransientFetchError = function isTransientFetchError(err) {
+        const msg = String(err?.message || err || '').toLowerCase();
+        return (
+            msg.includes('failed to fetch') ||
+            msg.includes('networkerror') ||
+            msg.includes('network request failed') ||
+            msg.includes('load failed') ||
+            msg.includes('aborterror') ||
+            msg.includes('the network connection was lost')
+        );
+    };
+
+    E.sleep = function sleep(ms) {
+        return new Promise((resolve) => {
+            setTimeout(resolve, ms);
+        });
+    };
+
+    E.fetchHtml = async function fetchHtml(pathOrUrl, options = {}) {
+        const raw = String(pathOrUrl || '');
+        const url = raw.startsWith('http')
+            ? raw
+            : new URL(raw, location.origin).toString();
+
+        const retries = Number(options.retries ?? 2);
+        const retryDelayMs = Number(options.retryDelayMs ?? 250);
+
+        let lastErr;
+        for (let attempt = 0; attempt <= retries; attempt += 1) {
+            try {
+                const res = await fetch(url, {
+                    credentials: 'include',
+                    cache: 'no-store',
+                });
+                if (!res.ok) throw new Error(`Fetch failed ${res.status}: ${url}`);
+                return await res.text();
+            } catch (err) {
+                lastErr = err;
+                const status = E.getFetchErrorStatus(err);
+                const isRetriableStatus =
+                    status === 408 ||
+                    status === 425 ||
+                    status === 429 ||
+                    (status >= 500 && status <= 599);
+                const isRetriableNetwork =
+                    status == null && E.isTransientFetchError(err);
+                const shouldRetry =
+                    attempt < retries &&
+                    (isRetriableStatus || isRetriableNetwork);
+
+                if (!shouldRetry) throw err;
+
+                await E.sleep(retryDelayMs * (attempt + 1));
+            }
+        }
+
+        throw lastErr;
     };
 
     E.parseAssignIndexHtml = function parseAssignIndexHtml(

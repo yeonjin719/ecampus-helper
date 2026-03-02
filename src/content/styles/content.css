@@ -212,6 +212,73 @@
   animation: ecdash-panel-in 0.28s ease-out;
 }
 
+:where(#ecdash-root, #ecdash-root *) {
+  box-sizing: border-box;
+}
+
+:where(
+  #ecdash-root :is(
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6,
+      p,
+      ul,
+      ol,
+      li,
+      figure,
+      blockquote,
+      dl,
+      dd,
+      label,
+      button,
+      input,
+      select,
+      textarea
+    )
+) {
+  margin: 0;
+}
+
+:where(#ecdash-root :is(button, input, select, textarea)) {
+  font: inherit;
+  color: inherit;
+}
+
+#ecdash-root :is(button, a, select, input[type='checkbox']) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+#ecdash-root :is(button, a, select, input[type='checkbox']):focus {
+  outline: none;
+}
+
+#ecdash-root :is(button, a, select, input[type='checkbox']):focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+#ecdash-root :is(button, a, select, input[type='checkbox']):focus-visible {
+  outline: 2px solid rgba(17, 24, 39, 0.45);
+  outline-offset: 2px;
+}
+
+#ecdash-settings-backdrop,
+#ecdash-settings-backdrop:hover,
+#ecdash-settings-backdrop:active {
+  background: rgba(9, 9, 11, 0.55);
+}
+
+#ecdash-root
+  .ecdash-settings-option
+  > input[type='checkbox'].ecdash-settings-checkbox {
+  margin: 0 !important;
+  margin-top: 0 !important;
+  vertical-align: middle;
+}
+
 .ecdash-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(24, 24, 27, 0.4) rgba(24, 24, 27, 0.08);

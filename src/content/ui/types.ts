@@ -1,7 +1,7 @@
 export type ItemType = 'ASSIGNMENT' | 'LECTURE' | 'FORUM' | 'RESOURCE' | 'NOTICE';
 export type ItemStatus = 'TODO' | 'DONE' | 'UNKNOWN';
-export type FilterValue = 'ALL' | 'DUE_SOON' | 'OVERDUE' | 'TODO_ONLY' | 'NOT_DONE';
-export type TypeFilterValue = 'ALL_TYPES' | ItemType;
+export type FilterValue = 'DUE_SOON' | 'OVERDUE' | 'TODO_ONLY' | 'NOT_DONE';
+export type TypeFilterValue = ItemType;
 
 export interface DashboardItem {
     id: string;
@@ -19,10 +19,13 @@ export interface DashboardItem {
 
 export interface UiState {
     items: DashboardItem[];
-    filter: FilterValue;
-    typeFilter: TypeFilterValue;
+    filter: FilterValue[];
+    typeFilter: TypeFilterValue[];
+    hiddenItemIds: string[];
     courseFilter: string;
     hidePastLectures: boolean;
+    hidePastAssignments: boolean;
+    hidePastForums: boolean;
     includeSmClass: boolean;
     collapsed: boolean;
     loading: boolean;

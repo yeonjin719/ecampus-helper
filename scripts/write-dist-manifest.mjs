@@ -15,4 +15,8 @@ if (manifest.action?.default_popup) {
   manifest.action.default_popup = stripDistPrefix(manifest.action.default_popup);
 }
 
+if (manifest.background?.service_worker) {
+  manifest.background.service_worker = stripDistPrefix(manifest.background.service_worker);
+}
+
 writeFileSync('dist/manifest.json', `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');

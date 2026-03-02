@@ -8,6 +8,7 @@ interface CourseGroupSectionProps {
     isOpen: boolean;
     runtime: DashboardRuntime;
     onToggle: () => void;
+    onHideItem: (itemId: string) => void;
 }
 
 export function CourseGroupSection({
@@ -16,6 +17,7 @@ export function CourseGroupSection({
     isOpen,
     runtime,
     onToggle,
+    onHideItem,
 }: CourseGroupSectionProps) {
     const now = Date.now();
     const dueSoonThreshold = now + 3 * 24 * 60 * 60 * 1000;
@@ -39,38 +41,35 @@ export function CourseGroupSection({
     );
 
     return (
-        <article className="mb-3 last:mb-0">
+        <article className="mb-3 p-4 last:mb-0 bg-white rounded-xl shadow-sm">
             <button
                 type="button"
-                className="mb-2 flex w-full items-center justify-between rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-left text-[12px] text-zinc-600 shadow-[0_5px_12px_rgba(0,0,0,0.05)] transition hover:border-zinc-500 hover:bg-zinc-50"
+                className="mb-2 flex w-full items-center justify-between rounded-xl border-none px-3 py-2 text-left text-[12px] text-zinc-600"
                 aria-expanded={isOpen}
                 onClick={onToggle}
             >
                 <div className="min-w-0 pr-2">
-                    <span className="inline-flex max-w-full items-center gap-1.5 text-[14px] font-semibold text-zinc-900">
+                    <span className="inline-flex max-w-full items-center gap-1.5 text-[14px] font-bold text-zinc-900">
                         {isNewCourse && (
                             <span
-                                className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500"
+                                className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-300"
                                 aria-hidden="true"
                             />
                         )}
                         <span className="truncate">{courseName}</span>
                     </span>
-                    <span className="mt-0.5 block text-[12px] text-zinc-500">
-                        과목별 활동 현황
-                    </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                     <span className="rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[12px] font-semibold text-zinc-700">
-                        {items.length}개
+                        {items.length}
                     </span>
                     {dueSoonCount > 0 && (
-                        <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[12px] font-semibold text-amber-800">
+                        <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[12px] font-semibold text-sky-700">
                             임박 {dueSoonCount}
                         </span>
                     )}
                     {overdueCount > 0 && (
-                        <span className="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[12px] font-semibold text-rose-700">
+                        <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[12px] font-semibold text-rose-600">
                             지남 {overdueCount}
                         </span>
                     )}
@@ -87,6 +86,7 @@ export function CourseGroupSection({
                             key={item.id}
                             item={item}
                             runtime={runtime}
+                            onHideItem={onHideItem}
                         />
                     ))}
                 </div>

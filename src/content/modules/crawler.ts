@@ -6,7 +6,6 @@
         completion: false,
     };
 
-
     // 활동 파싱 + 리포트 상태 병합 파이프라인.
     E.extractSectionName = function extractSectionName(sectionNode) {
         const selectors = [
@@ -174,6 +173,7 @@
             courseId,
             courseName,
             courseIsNew = false,
+            includeAssignments = false,
         ) {
             const items = [];
             const seenUrl = new Set();
@@ -233,7 +233,8 @@
                         href,
                         title,
                     );
-                    if (!type || type === 'ASSIGNMENT') continue;
+                    if (!type) continue;
+                    if (type === 'ASSIGNMENT' && !includeAssignments) continue;
 
                     const { status, dueAt, meta } =
                         E.extractSignalsFromActivityNode(activityNode);
@@ -427,7 +428,7 @@
             if (requiredTimeText || totalTimeTextRaw) {
                 const viewed = isMissingViewedTime ? '00:00' : totalTimeTextRaw;
                 const required = requiredTimeText || '-';
-                meta = `학습 ${viewed}/${required}`;
+                meta = `학습: ${viewed} / ${required}`;
                 if (attendanceText) meta += ` · 출석 ${attendanceText}`;
             } else if (typeof pct === 'number') {
                 meta = `진도 ${pct}%`;
@@ -506,7 +507,9 @@
             const seen = new Set();
             const extractTitleFromNode = (node) => {
                 if (!node) return '';
-                const nameEl = node.querySelector('.instancename, .activityname');
+                const nameEl = node.querySelector(
+                    '.instancename, .activityname',
+                );
                 if (!nameEl) return '';
 
                 const clone = nameEl.cloneNode(true);
@@ -612,33 +615,33 @@
         return false;
     };
 
-    E.collectVodIndexUrlsFromCourseView = function collectVodIndexUrlsFromCourseView(
-        doc,
-        courseId,
-    ) {
-        const urls = new Set();
+    E.collectVodIndexUrlsFromCourseView =
+        function collectVodIndexUrlsFromCourseView(doc, courseId) {
+            const urls = new Set();
 
-        doc.querySelectorAll('a[href*="/mod/vod/index.php"]').forEach((a) => {
-            const href = E.normalizeUrl(a.href);
-            if (href) urls.add(href);
-        });
-
-        const hasVodHint = Boolean(
-            doc.querySelector(
-                'a[href*="/mod/vod/"], li[class*="modtype_vod"], li[class*="modtype_video"], img[src*="/vod/"]',
-            ),
-        );
-        if (hasVodHint || courseId) {
-            urls.add(
-                new URL(
-                    `/mod/vod/index.php?id=${courseId}`,
-                    location.origin,
-                ).toString(),
+            doc.querySelectorAll('a[href*="/mod/vod/index.php"]').forEach(
+                (a) => {
+                    const href = E.normalizeUrl(a.href);
+                    if (href) urls.add(href);
+                },
             );
-        }
 
-        return [...urls];
-    };
+            const hasVodHint = Boolean(
+                doc.querySelector(
+                    'a[href*="/mod/vod/"], li[class*="modtype_vod"], li[class*="modtype_video"], img[src*="/vod/"]',
+                ),
+            );
+            if (hasVodHint || courseId) {
+                urls.add(
+                    new URL(
+                        `/mod/vod/index.php?id=${courseId}`,
+                        location.origin,
+                    ).toString(),
+                );
+            }
+
+            return [...urls];
+        };
 
     E.extractVodViewerUrlFromOnclick = function extractVodViewerUrlFromOnclick(
         onclickText,
@@ -647,9 +650,7 @@
         const source = E.cleanText(onclickText || '').replace(/&amp;/g, '&');
         if (!source) return '';
 
-        const match = source.match(
-            /window\.open\(\s*['"]([^'"]+)['"]/i,
-        );
+        const match = source.match(/window\.open\(\s*['"]([^'"]+)['"]/i);
         if (!match || !match[1]) return '';
 
         try {
@@ -659,90 +660,92 @@
         }
     };
 
-    E.parseVodIndexCandidatesFromHtml = function parseVodIndexCandidatesFromHtml(
-        htmlText,
-        indexUrl,
-    ) {
-        // 점검 필요: 현재 테마/페이지 구조에 맞춰 조정할 동영상 인덱스 테이블 셀렉터
-        const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-        const rows = [
-            ...doc.querySelectorAll(
-                'table.generaltable.mod_index tbody tr, table.mod_index tbody tr',
-            ),
-        ];
-        if (!rows.length) return [];
+    E.parseVodIndexCandidatesFromHtml =
+        function parseVodIndexCandidatesFromHtml(htmlText, indexUrl) {
+            // 점검 필요: 현재 테마/페이지 구조에 맞춰 조정할 동영상 인덱스 테이블 셀렉터
+            const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+            const rows = [
+                ...doc.querySelectorAll(
+                    'table.generaltable.mod_index tbody tr, table.mod_index tbody tr',
+                ),
+            ];
+            if (!rows.length) return [];
 
-        const candidates = [];
-        let lastSection;
+            const candidates = [];
+            let lastSection;
 
-        for (const row of rows) {
-            const sectionText = E.cleanText(
-                row.querySelector('td.c0')?.textContent,
-            );
-            if (sectionText) lastSection = sectionText;
+            for (const row of rows) {
+                const sectionText = E.cleanText(
+                    row.querySelector('td.c0')?.textContent,
+                );
+                if (sectionText) lastSection = sectionText;
 
-            const link = row.querySelector('td.c1 a[href]');
-            const title = E.cleanText(link?.textContent);
-            if (!title) continue;
+                const link = row.querySelector('td.c1 a[href]');
+                const title = E.cleanText(link?.textContent);
+                if (!title) continue;
 
-            const rawHref = E.cleanText(link?.getAttribute('href') || '');
-            let resolvedHref = '';
-            if (rawHref) {
-                try {
-                    resolvedHref = new URL(rawHref, indexUrl).toString();
-                } catch {
-                    resolvedHref = '';
+                const rawHref = E.cleanText(link?.getAttribute('href') || '');
+                let resolvedHref = '';
+                if (rawHref) {
+                    try {
+                        resolvedHref = new URL(rawHref, indexUrl).toString();
+                    } catch {
+                        resolvedHref = '';
+                    }
                 }
+
+                const viewerUrl = E.extractVodViewerUrlFromOnclick(
+                    link?.getAttribute('onclick'),
+                    indexUrl,
+                );
+                const bestUrl = E.normalizeUrl(viewerUrl || resolvedHref);
+                if (!bestUrl) continue;
+
+                candidates.push({
+                    title,
+                    url: bestUrl,
+                    section: lastSection,
+                });
             }
 
-            const viewerUrl = E.extractVodViewerUrlFromOnclick(
-                link?.getAttribute('onclick'),
-                indexUrl,
+            return candidates;
+        };
+
+    E.collectVodLectureLinkCandidates =
+        async function collectVodLectureLinkCandidates(doc, courseId) {
+            const vodIndexUrls = E.collectVodIndexUrlsFromCourseView(
+                doc,
+                courseId,
             );
-            const bestUrl = E.normalizeUrl(viewerUrl || resolvedHref);
-            if (!bestUrl) continue;
+            if (!vodIndexUrls.length) return [];
 
-            candidates.push({
-                title,
-                url: bestUrl,
-                section: lastSection,
-            });
-        }
-
-        return candidates;
-    };
-
-    E.collectVodLectureLinkCandidates = async function collectVodLectureLinkCandidates(
-        doc,
-        courseId,
-    ) {
-        const vodIndexUrls = E.collectVodIndexUrlsFromCourseView(doc, courseId);
-        if (!vodIndexUrls.length) return [];
-
-        const chunked = await E.mapWithConcurrency(
-            vodIndexUrls,
-            Math.min(2, vodIndexUrls.length),
-            async (indexUrl) => {
-                try {
-                    const html = await E.fetchHtml(indexUrl);
-                    return E.parseVodIndexCandidatesFromHtml(html, indexUrl);
-                } catch (err) {
-                    const msg = String(err?.message || err || '');
-                    const is404 = msg.includes('Fetch failed 404');
-                    if (!is404) {
-                        console.warn(
-                            '[ECDASH] vod index crawl failed:',
+            const chunked = await E.mapWithConcurrency(
+                vodIndexUrls,
+                Math.min(2, vodIndexUrls.length),
+                async (indexUrl) => {
+                    try {
+                        const html = await E.fetchHtml(indexUrl);
+                        return E.parseVodIndexCandidatesFromHtml(
+                            html,
                             indexUrl,
-                            err,
                         );
+                    } catch (err) {
+                        const msg = String(err?.message || err || '');
+                        const is404 = msg.includes('Fetch failed 404');
+                        if (!is404) {
+                            console.warn(
+                                '[ECDASH] vod index crawl failed:',
+                                indexUrl,
+                                err,
+                            );
+                        }
+                        return [];
                     }
-                    return [];
-                }
-            },
-        );
+                },
+            );
 
-        return chunked.flat();
-    };
+            return chunked.flat();
+        };
 
     E.resolveLectureUrlsByCandidates = function resolveLectureUrlsByCandidates(
         items,
@@ -775,7 +778,9 @@
 
         const pickBestUrlCandidate = (hits) => {
             if (!Array.isArray(hits) || !hits.length) return undefined;
-            const withUrl = hits.filter((hit) => Boolean(E.normalizeUrl(hit.url)));
+            const withUrl = hits.filter((hit) =>
+                Boolean(E.normalizeUrl(hit.url)),
+            );
             if (!withUrl.length) return undefined;
             return withUrl.reduce((best, current) => {
                 if (!best) return current;
@@ -785,7 +790,9 @@
 
         const pickBestMetaCandidate = (hits) => {
             if (!Array.isArray(hits) || !hits.length) return undefined;
-            return hits.find((hit) => hit?.dueAt || E.cleanText(hit?.meta || ''));
+            return hits.find(
+                (hit) => hit?.dueAt || E.cleanText(hit?.meta || ''),
+            );
         };
 
         return items.map((item) => {
@@ -982,9 +989,14 @@
 
             map.set(key, {
                 ...prev,
-                courseName: E.stripCourseNewToken(
-                    prev.courseName || item.courseName,
-                ),
+                courseName:
+                    (typeof E.cleanCourseDisplayName === 'function'
+                        ? E.cleanCourseDisplayName(
+                              prev.courseName || item.courseName,
+                          )
+                        : E.stripCourseNewToken(
+                              prev.courseName || item.courseName,
+                          )) || '',
                 courseIsNew: Boolean(prev.courseIsNew || item.courseIsNew),
                 dueAt: prev.dueAt ?? item.dueAt,
                 status:
@@ -1006,10 +1018,14 @@
     }) {
         // 과목 단위 크롤링은 "과목 페이지 허브 + 상세 보고서 보강 + 과제 인덱스"를 합산.
         const all = [];
+        let assignmentFallbackItems = [];
         const normalizedCourseName =
-            E.stripCourseNewToken(courseName) || `course-${courseId}`;
+            (typeof E.cleanCourseDisplayName === 'function'
+                ? E.cleanCourseDisplayName(courseName)
+                : E.stripCourseNewToken(courseName)) || `course-${courseId}`;
         const normalizedCourseIsNew =
-            Boolean(courseIsNew) || /\bnew\b/i.test(E.cleanText(courseName || ''));
+            Boolean(courseIsNew) ||
+            /\bnew\b/i.test(E.cleanText(courseName || ''));
 
         let courseDoc;
         try {
@@ -1026,6 +1042,10 @@
                 courseId,
                 normalizedCourseName,
                 normalizedCourseIsNew,
+                true,
+            );
+            assignmentFallbackItems = moduleItems.filter(
+                (it) => it.type === 'ASSIGNMENT',
             );
             let lectureLinkCandidates =
                 E.collectActivityLinkCandidatesFromCourseView(courseDoc);
@@ -1121,7 +1141,9 @@
                                 E.reportPathSupport.progress = false;
                             }
                             if (
-                                reportUrl.includes('/report/completion/index.php')
+                                reportUrl.includes(
+                                    '/report/completion/index.php',
+                                )
                             ) {
                                 E.reportPathSupport.completion = false;
                             }
@@ -1182,12 +1204,25 @@
                 normalizedCourseName,
                 normalizedCourseIsNew,
             );
-            all.push(...assignItems);
+            if (assignItems.length) {
+                all.push(...assignItems);
+            } else if (assignmentFallbackItems.length) {
+                all.push(...assignmentFallbackItems);
+                console.warn(
+                    `[ECDASH] assignment index empty. using course-view fallback. courseId=${courseId} count=${assignmentFallbackItems.length}`,
+                );
+            }
         } catch (err) {
             console.warn(
                 `[ECDASH] assignment crawl failed. courseId=${courseId} (${normalizedCourseName})`,
                 err,
             );
+            if (assignmentFallbackItems.length) {
+                all.push(...assignmentFallbackItems);
+                console.warn(
+                    `[ECDASH] assignment fallback used from course view. courseId=${courseId} count=${assignmentFallbackItems.length}`,
+                );
+            }
         }
 
         return E.dedupeItems(all);
@@ -1218,7 +1253,11 @@
                         '.page-header-headings h1, .coursename h1, h1',
                     )?.textContent,
                 ) || `course-${courseId || 'unknown'}`;
-            const courseName = E.stripCourseNewToken(rawCourseName);
+            const courseName =
+                (typeof E.cleanCourseDisplayName === 'function'
+                    ? E.cleanCourseDisplayName(rawCourseName)
+                    : E.stripCourseNewToken(rawCourseName)) ||
+                `course-${courseId || 'unknown'}`;
             const courseIsNew = /\bnew\b/i.test(rawCourseName);
 
             const reportMap = E.parseStatusRowsFromReportHtml(

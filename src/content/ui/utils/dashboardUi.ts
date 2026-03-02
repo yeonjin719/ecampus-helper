@@ -13,10 +13,27 @@ export function cleanText(value: unknown) {
         .trim();
 }
 
+function stripCourseDecorators(value: string) {
+    let text = cleanText(value || '');
+    if (!text) return '';
+
+    text = text.replace(/^\s*(?:\[[^\]]+\]\s*)+/, '');
+    text = text.replace(/\s*(?:\[[^\]]+\]\s*)+$/, '');
+
+    let prev = '';
+    while (text && prev !== text) {
+        prev = text;
+        text = text.replace(/\s*\([^()]*\)\s*$/, '').trim();
+    }
+
+    return cleanText(text);
+}
+
 export function normalizeCourseName(value: unknown) {
     const text = cleanText(value || '');
     if (!text) return '';
-    return cleanText(text.replace(/\s*\bnew\b\s*$/i, ''));
+    const noNew = cleanText(text.replace(/\s*\bnew\b\s*$/i, ''));
+    return stripCourseDecorators(noNew) || noNew;
 }
 
 export function hasCourseNewToken(value: unknown) {
@@ -61,7 +78,7 @@ export function splitMetaByPeriod(
     const periodParts: string[] = [];
 
     for (const part of parts) {
-        if (/^(?:기간(?:\s|$)|period\b)/i.test(part)) {
+        if (/^(?:기간|period)\s*(?::|：|\s|$)/i.test(part)) {
             periodParts.push(part);
         } else if (itemType === 'RESOURCE' && /\d{1,3}\s*%/.test(part)) {
             continue;
@@ -83,7 +100,48 @@ export function sanitizeFilename(value: string) {
         .trim();
 }
 
-export function triggerResourceDownload(
+function triggerDownloadByAnchor(url: string, filename: string) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.rel = 'noopener';
+    if (filename) {
+        a.download = filename;
+    }
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+function requestExtensionDownload(url: string, filename: string) {
+    const chromeRuntime = (globalThis as any)?.chrome?.runtime;
+    if (!chromeRuntime?.sendMessage) {
+        return Promise.resolve(false);
+    }
+
+    return new Promise<boolean>((resolve) => {
+        try {
+            chromeRuntime.sendMessage(
+                {
+                    type: 'ecdash:download-resource',
+                    payload: { url, filename },
+                },
+                (response: any) => {
+                    const lastError = (globalThis as any)?.chrome?.runtime
+                        ?.lastError;
+                    if (lastError) {
+                        resolve(false);
+                        return;
+                    }
+                    resolve(Boolean(response?.ok));
+                },
+            );
+        } catch (_) {
+            resolve(false);
+        }
+    });
+}
+
+export async function triggerResourceDownload(
     runtime: DashboardRuntime,
     url?: string,
     title?: string,
@@ -91,19 +149,38 @@ export function triggerResourceDownload(
     const normalizedUrl = runtime.normalizeUrl?.(url || '') || '';
     if (!normalizedUrl) return;
 
-    const a = document.createElement('a');
-    a.href = normalizedUrl;
-    a.target = '_blank';
-    a.rel = 'noopener';
-
     const filename = sanitizeFilename(title || 'resource');
-    if (filename) {
-        a.download = filename;
+    if (!normalizedUrl.startsWith('blob:')) {
+        const requestedByExtension = await requestExtensionDownload(
+            normalizedUrl,
+            filename,
+        );
+        if (requestedByExtension) {
+            return;
+        }
+
+        try {
+            const response = await fetch(normalizedUrl, {
+                credentials: 'include',
+                cache: 'no-store',
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                if (blob && blob.size > 0) {
+                    const blobUrl = URL.createObjectURL(blob);
+                    triggerDownloadByAnchor(blobUrl, filename);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+                    return;
+                }
+            }
+        } catch (_) {
+            // 무시
+        }
+        return;
     }
 
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    triggerDownloadByAnchor(normalizedUrl, filename);
 }
 
 export function buildErrorReportMailto(sub: string) {
@@ -123,58 +200,91 @@ export function buildErrorReportMailto(sub: string) {
 
 export function typeBadgeClass(type: ItemType) {
     if (type === 'ASSIGNMENT')
-        return 'bg-rose-100 text-rose-800 ring-1 ring-rose-300';
+        return 'bg-rose-50 text-rose-500 ring-1 ring-rose-100';
     if (type === 'LECTURE')
-        return 'bg-sky-100 text-sky-800 ring-1 ring-sky-300';
+        return 'bg-sky-50 text-sky-500 ring-1 ring-sky-100';
     if (type === 'FORUM')
-        return 'bg-amber-100 text-amber-800 ring-1 ring-amber-300';
+        return 'bg-amber-50 text-amber-500 ring-1 ring-amber-100';
     if (type === 'RESOURCE')
-        return 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300';
-    return 'bg-violet-100 text-violet-800 ring-1 ring-violet-300';
+        return 'bg-emerald-50 text-emerald-500 ring-1 ring-emerald-100';
+    if (type === 'NOTICE')
+        return 'bg-violet-50 text-violet-500 ring-1 ring-violet-100';
+    return 'bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200';
 }
 
 export function statusChipClass(runtime: DashboardRuntime, status: ItemStatus) {
     const statusClass = runtime.statusClass?.(status);
     if (statusClass === 'todo')
-        return 'bg-amber-100 text-amber-900 ring-1 ring-amber-300';
+        return 'bg-rose-50 text-rose-600 ring-1 ring-rose-100';
     if (statusClass === 'done')
-        return 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300';
-    return 'bg-zinc-100 text-zinc-800 ring-1 ring-zinc-300';
+        return 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100';
+    return 'bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200';
+}
+
+export function stateBadgeClass(
+    runtime: DashboardRuntime,
+    status: ItemStatus,
+    dueAt?: number,
+) {
+    const statusClass = runtime.statusClass?.(status);
+    const now = Date.now();
+    const in3days = now + 3 * 24 * 60 * 60 * 1000;
+
+    if (statusClass === 'done') {
+        return 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100';
+    }
+
+    if (statusClass === 'todo') {
+        return 'bg-rose-50 text-rose-600 ring-1 ring-rose-100';
+    }
+
+    if (typeof dueAt === 'number') {
+        if (dueAt < now) {
+            return 'bg-rose-50 text-rose-600 ring-1 ring-rose-100';
+        }
+        if (dueAt <= in3days) {
+            return 'bg-amber-50 text-amber-600 ring-1 ring-amber-100';
+        }
+    }
+
+    return 'bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200';
 }
 
 export function itemCardToneClass(type: ItemType) {
     if (type === 'ASSIGNMENT')
-        return 'border-rose-200 bg-rose-50/50 hover:border-rose-300';
+        return 'border-zinc-200 border-l-[3px] border-l-rose-200 bg-white hover:border-rose-100 hover:bg-rose-50/35';
     if (type === 'LECTURE')
-        return 'border-sky-200 bg-sky-50/50 hover:border-sky-300';
+        return 'border-zinc-200 border-l-[3px] border-l-sky-200 bg-white hover:border-sky-100 hover:bg-sky-50/35';
     if (type === 'FORUM')
-        return 'border-amber-200 bg-amber-50/50 hover:border-amber-300';
+        return 'border-zinc-200 border-l-[3px] border-l-amber-200 bg-white hover:border-amber-100 hover:bg-amber-50/35';
     if (type === 'RESOURCE')
-        return 'border-emerald-200 bg-emerald-50/50 hover:border-emerald-300';
-    return 'border-violet-200 bg-violet-50/50 hover:border-violet-300';
+        return 'border-zinc-200 border-l-[3px] border-l-emerald-200 bg-white hover:border-emerald-100 hover:bg-emerald-50/35';
+    if (type === 'NOTICE')
+        return 'border-zinc-200 border-l-[3px] border-l-violet-200 bg-white hover:border-violet-100 hover:bg-violet-50/35';
+    return 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50';
 }
 
 export function ddayBadgeClass(dueAt?: number) {
     if (typeof dueAt !== 'number') {
-        return 'bg-zinc-100 text-zinc-800 ring-1 ring-zinc-300';
+        return 'bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200';
     }
 
     const diff = dueAt - Date.now();
     const day = 24 * 60 * 60 * 1000;
 
     if (diff < 0) {
-        return 'bg-rose-600 text-white ring-1 ring-rose-700';
+        return 'bg-rose-50 text-rose-600 ring-1 ring-rose-100';
     }
 
     if (diff <= day) {
-        return 'bg-red-600 text-white ring-1 ring-red-700';
+        return 'bg-orange-50 text-orange-600 ring-1 ring-orange-100';
     }
 
     if (diff <= 3 * day) {
-        return 'bg-amber-400 text-amber-950 ring-1 ring-amber-500';
+        return 'bg-amber-50 text-amber-600 ring-1 ring-amber-100';
     }
 
-    return 'bg-sky-100 text-sky-900 ring-1 ring-sky-300';
+    return 'bg-sky-50 text-sky-600 ring-1 ring-sky-100';
 }
 
 export function collectCourseNames(
@@ -231,8 +341,17 @@ export function selectFilteredItems(state: UiState) {
     const now = Date.now();
     const in3days = now + 3 * 24 * 60 * 60 * 1000;
     const normalizedCourseFilter = normalizeCourseName(state.courseFilter);
+    const selectedFilters = Array.isArray(state.filter) ? state.filter : [];
+    const selectedTypes = Array.isArray(state.typeFilter) ? state.typeFilter : [];
+    const hiddenItemIdSet = new Set(
+        Array.isArray(state.hiddenItemIds) ? state.hiddenItemIds : [],
+    );
 
     const filtered = state.items.filter((item) => {
+        if (hiddenItemIdSet.has(cleanText(item.id))) {
+            return false;
+        }
+
         const itemCourseName = normalizeCourseName(item.courseName);
         if (
             normalizedCourseFilter !== COURSE_FILTER_ALL &&
@@ -241,7 +360,7 @@ export function selectFilteredItems(state: UiState) {
             return false;
         }
 
-        if (state.typeFilter !== 'ALL_TYPES' && item.type !== state.typeFilter) {
+        if (selectedTypes.length && !selectedTypes.includes(item.type)) {
             return false;
         }
 
@@ -254,15 +373,53 @@ export function selectFilteredItems(state: UiState) {
             return false;
         }
 
-        if (state.filter === 'ALL') return true;
-        if (state.filter === 'DUE_SOON')
-            return (
-                item.dueAt != null && item.dueAt <= in3days && item.dueAt >= now
-            );
-        if (state.filter === 'OVERDUE') return item.dueAt != null && item.dueAt < now;
-        if (state.filter === 'TODO_ONLY') return item.status === 'TODO';
-        if (state.filter === 'NOT_DONE')
-            return item.type !== 'NOTICE' && item.status !== 'DONE';
+        if (
+            state.hidePastAssignments &&
+            item.type === 'ASSIGNMENT' &&
+            typeof item.dueAt === 'number' &&
+            item.dueAt < now
+        ) {
+            return false;
+        }
+
+        if (
+            state.hidePastForums &&
+            item.type === 'FORUM' &&
+            typeof item.dueAt === 'number' &&
+            item.dueAt < now
+        ) {
+            return false;
+        }
+
+        if (!selectedFilters.length) return true;
+
+        const matchesFilter = selectedFilters.some((filterValue) => {
+            if (filterValue === 'DUE_SOON') {
+                return (
+                    item.dueAt != null &&
+                    item.dueAt <= in3days &&
+                    item.dueAt >= now
+                );
+            }
+
+            if (filterValue === 'OVERDUE') {
+                return item.dueAt != null && item.dueAt < now;
+            }
+
+            if (filterValue === 'TODO_ONLY') {
+                return item.status === 'TODO';
+            }
+
+            if (filterValue === 'NOT_DONE') {
+                return item.type !== 'NOTICE' && item.status !== 'DONE';
+            }
+
+            return false;
+        });
+
+        if (!matchesFilter) {
+            return false;
+        }
 
         return true;
     });

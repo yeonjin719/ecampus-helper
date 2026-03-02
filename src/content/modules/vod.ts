@@ -262,11 +262,45 @@
         return true;
     };
 
+    E.requestExtensionDownload = function requestExtensionDownload(url, filename) {
+        const chromeRuntime = globalThis?.chrome?.runtime;
+        if (!chromeRuntime?.sendMessage) {
+            return Promise.resolve(false);
+        }
+
+        return new Promise((resolve) => {
+            try {
+                chromeRuntime.sendMessage(
+                    {
+                        type: 'ecdash:download-resource',
+                        payload: { url, filename },
+                    },
+                    (response) => {
+                        const lastError = globalThis?.chrome?.runtime?.lastError;
+                        if (lastError) {
+                            resolve(false);
+                            return;
+                        }
+                        resolve(Boolean(response?.ok));
+                    },
+                );
+            } catch (_) {
+                resolve(false);
+            }
+        });
+    };
+
     E.triggerVodDownload = async function triggerVodDownload(url, filename) {
         const normalizedUrl = E.toAbsoluteVodUrl(url);
         if (!normalizedUrl) return false;
 
         if (!normalizedUrl.startsWith('blob:')) {
+            const requestedByExtension = await E.requestExtensionDownload(
+                normalizedUrl,
+                filename,
+            );
+            if (requestedByExtension) return true;
+
             try {
                 const response = await fetch(normalizedUrl, {
                     credentials: 'include',
@@ -287,6 +321,7 @@
             } catch (_) {
                 // 무시
             }
+            return false;
         }
 
         return E.triggerVodDownloadByAnchor(normalizedUrl, filename);

@@ -8,11 +8,15 @@ import { createRoot, type Root } from 'react-dom/client';
 import {
     COURSE_FILTER_ALL,
     UI_COLLAPSED_KEY,
+    UI_HIDDEN_ITEM_IDS_KEY,
+    UI_HIDE_PAST_ASSIGNMENTS_KEY,
+    UI_HIDE_PAST_FORUMS_KEY,
     UI_HIDE_PAST_LECTURES_KEY,
     UI_INCLUDE_SM_CLASS_KEY,
 } from './constants';
 import { DashboardContent } from './components/DashboardContent';
 import { DashboardShell } from './components/DashboardShell';
+import type { HiddenItemPreview } from './components/dashboardShell/types';
 import { UiStore } from './store/UiStore';
 import type {
     DashboardItem,
@@ -28,6 +32,25 @@ import {
     normalizeCourseName,
     selectFilteredItems,
 } from './utils/dashboardUi';
+
+function normalizeHiddenItemIds(value: unknown) {
+    if (!Array.isArray(value)) return [];
+
+    return [...new Set(value.map((id) => cleanText(id)).filter(Boolean))].slice(
+        -1000,
+    );
+}
+
+function formatHiddenItemDueLabel(dueAt?: number) {
+    if (typeof dueAt !== 'number') return '';
+    return `마감 ${new Date(dueAt).toLocaleString(undefined, {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    })}`;
+}
 
 function DashboardApp({
     store,
@@ -58,6 +81,57 @@ function DashboardApp({
         () => normalizeCourseName(state.courseFilter) || COURSE_FILTER_ALL,
         [state.courseFilter],
     );
+    const hiddenItems = useMemo<HiddenItemPreview[]>(() => {
+        const itemMap = new Map(
+            state.items.map((item) => [cleanText(item.id), item]),
+        );
+
+        return state.hiddenItemIds.map((hiddenItemId) => {
+            const item = itemMap.get(hiddenItemId);
+            if (!item) {
+                return {
+                    id: hiddenItemId,
+                    title: '현재 데이터에서 찾을 수 없는 항목',
+                    courseName: '과목 정보 없음',
+                    typeLabel: '유형 미상',
+                    statusLabel: '목록에서 사라짐',
+                    dueLabel: '',
+                };
+            }
+
+            const statusLabelRaw = cleanText(
+                runtime.statusLabel?.(item.status) || item.status,
+            );
+
+            return {
+                id: hiddenItemId,
+                title: cleanText(item.title) || '(제목 없음)',
+                courseName:
+                    normalizeCourseName(item.courseName) ||
+                    cleanText(item.courseName) ||
+                    '과목 미상',
+                typeLabel: cleanText(runtime.TYPE_LABEL?.[item.type] || item.type),
+                statusLabel: /상태\s*미상|unknown/i.test(statusLabelRaw)
+                    ? '상태 미상'
+                    : statusLabelRaw,
+                dueLabel: formatHiddenItemDueLabel(item.dueAt),
+            };
+        });
+    }, [runtime, state.hiddenItemIds, state.items]);
+
+    const updateHiddenItemIds = async (nextHiddenItemIds: string[]) => {
+        const normalizedNextHiddenItemIds =
+            normalizeHiddenItemIds(nextHiddenItemIds);
+        runtime.__hiddenItemIds = normalizedNextHiddenItemIds;
+        store.setState({ hiddenItemIds: normalizedNextHiddenItemIds });
+        try {
+            await chrome.storage?.local?.set?.({
+                [UI_HIDDEN_ITEM_IDS_KEY]: normalizedNextHiddenItemIds,
+            });
+        } catch {
+            // ignore
+        }
+    };
 
     useEffect(() => {
         if (
@@ -132,7 +206,11 @@ function DashboardApp({
             settingsOpen={state.settingsOpen}
             contactLink={contactLink}
             hidePastLectures={state.hidePastLectures}
+            hidePastAssignments={state.hidePastAssignments}
+            hidePastForums={state.hidePastForums}
             includeSmClass={state.includeSmClass}
+            hiddenItemCount={state.hiddenItemIds.length}
+            hiddenItems={hiddenItems}
             onToggleCollapsed={async () => {
                 const nextCollapsed = !state.collapsed;
                 store.setState({ collapsed: nextCollapsed });
@@ -144,11 +222,11 @@ function DashboardApp({
                     // ignore
                 }
             }}
-            onFilterChange={(value) => {
-                store.setState({ filter: value as FilterValue });
+            onFilterChange={(values) => {
+                store.setState({ filter: values as FilterValue[] });
             }}
-            onTypeFilterChange={(value) => {
-                store.setState({ typeFilter: value as TypeFilterValue });
+            onTypeFilterChange={(values) => {
+                store.setState({ typeFilter: values as TypeFilterValue[] });
             }}
             onRefresh={() => {
                 runtime.refreshAll?.({ force: true });
@@ -174,6 +252,28 @@ function DashboardApp({
                     // ignore
                 }
             }}
+            onHidePastAssignmentsChange={async (checked) => {
+                runtime.__hidePastAssignments = checked;
+                store.setState({ hidePastAssignments: checked });
+                try {
+                    await chrome.storage?.local?.set?.({
+                        [UI_HIDE_PAST_ASSIGNMENTS_KEY]: checked,
+                    });
+                } catch {
+                    // ignore
+                }
+            }}
+            onHidePastForumsChange={async (checked) => {
+                runtime.__hidePastForums = checked;
+                store.setState({ hidePastForums: checked });
+                try {
+                    await chrome.storage?.local?.set?.({
+                        [UI_HIDE_PAST_FORUMS_KEY]: checked,
+                    });
+                } catch {
+                    // ignore
+                }
+            }}
             onIncludeSmClassChange={async (checked) => {
                 runtime.__includeSmClass = checked;
                 store.setState({ includeSmClass: checked });
@@ -191,12 +291,27 @@ function DashboardApp({
                     runtime.render(window.__ECDASH_ITEMS__ || []);
                 }
             }}
+            onUnhideItem={async (itemId) => {
+                const normalizedItemId = cleanText(itemId);
+                if (!normalizedItemId) return;
+                if (!state.hiddenItemIds.includes(normalizedItemId)) return;
+
+                const nextHiddenItemIds = state.hiddenItemIds.filter(
+                    (hiddenItemId) => hiddenItemId !== normalizedItemId,
+                );
+                await updateHiddenItemIds(nextHiddenItemIds);
+            }}
+            onResetHiddenItems={async () => {
+                if (!state.hiddenItemIds.length) return;
+                await updateHiddenItemIds([]);
+            }}
         >
             <DashboardContent
                 runtime={runtime}
                 hasItems={state.items.length > 0}
                 loading={state.loading}
                 loadingMessage={state.loadingMessage}
+                hiddenItemCount={state.hiddenItemIds.length}
                 filteredItems={filtered}
                 groupEntries={groupEntries}
                 courseOpenMap={courseOpenMap}
@@ -205,6 +320,17 @@ function DashboardApp({
                         ...prev,
                         [courseName]: !(prev[courseName] ?? true),
                     }));
+                }}
+                onHideItem={async (itemId) => {
+                    const normalizedItemId = cleanText(itemId);
+                    if (!normalizedItemId) return;
+                    if (state.hiddenItemIds.includes(normalizedItemId)) return;
+
+                    const nextHiddenItemIds = normalizeHiddenItemIds([
+                        ...state.hiddenItemIds,
+                        normalizedItemId,
+                    ]);
+                    await updateHiddenItemIds(nextHiddenItemIds);
                 }}
             />
         </DashboardShell>
@@ -222,7 +348,10 @@ function DashboardApp({
         normalizeCourseName(runtime.__courseFilter || COURSE_FILTER_ALL) ||
         COURSE_FILTER_ALL;
     runtime.__hidePastLectures = Boolean(runtime.__hidePastLectures);
+    runtime.__hidePastAssignments = Boolean(runtime.__hidePastAssignments);
+    runtime.__hidePastForums = Boolean(runtime.__hidePastForums);
     runtime.__includeSmClass = Boolean(runtime.__includeSmClass);
+    runtime.__hiddenItemIds = normalizeHiddenItemIds(runtime.__hiddenItemIds);
     runtime.__lastBadge = cleanText(runtime.__lastBadge || '');
     runtime.__lastSub = cleanText(runtime.__lastSub || '');
 
@@ -230,10 +359,13 @@ function DashboardApp({
         items: Array.isArray(window.__ECDASH_ITEMS__)
             ? (window.__ECDASH_ITEMS__ as DashboardItem[])
             : [],
-        filter: 'ALL',
-        typeFilter: 'ALL_TYPES',
+        filter: [],
+        typeFilter: [],
+        hiddenItemIds: normalizeHiddenItemIds(runtime.__hiddenItemIds),
         courseFilter: runtime.__courseFilter || COURSE_FILTER_ALL,
         hidePastLectures: Boolean(runtime.__hidePastLectures),
+        hidePastAssignments: Boolean(runtime.__hidePastAssignments),
+        hidePastForums: Boolean(runtime.__hidePastForums),
         includeSmClass: Boolean(runtime.__includeSmClass),
         collapsed: false,
         loading: Boolean(runtime.__isLoading),
@@ -251,22 +383,38 @@ function DashboardApp({
             const res = await chrome.storage?.local?.get?.([
                 UI_COLLAPSED_KEY,
                 UI_HIDE_PAST_LECTURES_KEY,
+                UI_HIDE_PAST_ASSIGNMENTS_KEY,
+                UI_HIDE_PAST_FORUMS_KEY,
                 UI_INCLUDE_SM_CLASS_KEY,
+                UI_HIDDEN_ITEM_IDS_KEY,
             ]);
 
             const nextCollapsed = Boolean(res?.[UI_COLLAPSED_KEY]);
             const nextHidePastLectures = Boolean(
                 res?.[UI_HIDE_PAST_LECTURES_KEY],
             );
+            const nextHidePastAssignments = Boolean(
+                res?.[UI_HIDE_PAST_ASSIGNMENTS_KEY],
+            );
+            const nextHidePastForums = Boolean(res?.[UI_HIDE_PAST_FORUMS_KEY]);
             const nextIncludeSmClass = Boolean(res?.[UI_INCLUDE_SM_CLASS_KEY]);
+            const nextHiddenItemIds = normalizeHiddenItemIds(
+                res?.[UI_HIDDEN_ITEM_IDS_KEY],
+            );
 
             runtime.__hidePastLectures = nextHidePastLectures;
+            runtime.__hidePastAssignments = nextHidePastAssignments;
+            runtime.__hidePastForums = nextHidePastForums;
             runtime.__includeSmClass = nextIncludeSmClass;
+            runtime.__hiddenItemIds = nextHiddenItemIds;
 
             store.setState({
                 collapsed: nextCollapsed,
                 hidePastLectures: nextHidePastLectures,
+                hidePastAssignments: nextHidePastAssignments,
+                hidePastForums: nextHidePastForums,
                 includeSmClass: nextIncludeSmClass,
+                hiddenItemIds: nextHiddenItemIds,
             });
         } catch {
             // ignore
@@ -288,7 +436,6 @@ function DashboardApp({
                 document.body.appendChild(rootEl);
             }
         }
-
         if (!mountedRoot) {
             mountedRoot = createRoot(rootEl);
             mountedRoot.render(
@@ -357,7 +504,10 @@ function DashboardApp({
                 normalizeCourseName(runtime.__courseFilter || COURSE_FILTER_ALL) ||
                 COURSE_FILTER_ALL,
             hidePastLectures: Boolean(runtime.__hidePastLectures),
+            hidePastAssignments: Boolean(runtime.__hidePastAssignments),
+            hidePastForums: Boolean(runtime.__hidePastForums),
             includeSmClass: Boolean(runtime.__includeSmClass),
+            hiddenItemIds: normalizeHiddenItemIds(runtime.__hiddenItemIds),
         });
     };
 })();
