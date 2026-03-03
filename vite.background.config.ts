@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -10,7 +9,7 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: false,
     lib: {
-      entry: resolve(__dirname, 'src/background/index.ts'),
+      entry: 'src/background/index.ts',
       name: 'EcdashBackground',
       formats: ['es'],
       fileName: () => 'background.js',

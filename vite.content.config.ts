@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -13,7 +12,7 @@ export default defineConfig({
     emptyOutDir: true,
     cssCodeSplit: false,
     lib: {
-      entry: resolve(__dirname, 'src/content/index.ts'),
+      entry: 'src/content/index.ts',
       name: 'EcdashContent',
       formats: ['iife'],
       fileName: () => 'content.js',
