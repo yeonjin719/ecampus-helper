@@ -66,10 +66,12 @@
             lowerHref.includes('/mod/url/') ||
             lowerHref.includes('/mod/page/') ||
             lowerHref.includes('/mod/file/') ||
+            lowerHref.includes('/mod/ubfile/') ||
             nodeClass.includes('modtype_resource') ||
             nodeClass.includes('modtype_folder') ||
             nodeClass.includes('modtype_url') ||
-            nodeClass.includes('modtype_page')
+            nodeClass.includes('modtype_page') ||
+            nodeClass.includes('modtype_ubfile')
         ) {
             return 'RESOURCE';
         }
