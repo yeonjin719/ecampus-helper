@@ -1,4 +1,5 @@
 # eHelper
+<img width="5120" height="3200" alt="홍보_safe" src="https://github.com/user-attachments/assets/3224c78d-3b29-42f0-9812-4c5cc5c7e411" />
 
 eCampus 페이지에서 과목별 학습 항목(과제/강의/토론/자료/공지)을 한눈에 관리할 수 있도록 우측 대시보드 패널과 VOD 보조 기능을 제공하는 Chrome Extension입니다.
 
