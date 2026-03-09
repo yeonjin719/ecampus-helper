@@ -76,7 +76,8 @@ function getVisibleCachedCourses(
     return includeSmClass
         ? normalizedCourses
         : typeof runtime.filterSmClassCourses === 'function'
-          ? runtime.filterSmClassCourses(normalizedCourses, false)?.courses || []
+          ? runtime.filterSmClassCourses(normalizedCourses, false)?.courses ||
+            []
           : normalizedCourses.filter(
                 (course: any) => !Boolean(course?.isSmClass),
             );
@@ -232,9 +233,10 @@ export async function triggerResourceDownload(
             });
 
             if (response.ok) {
-                const filenameFromHeader = extractFilenameFromContentDisposition(
-                    response.headers.get('content-disposition'),
-                );
+                const filenameFromHeader =
+                    extractFilenameFromContentDisposition(
+                        response.headers.get('content-disposition'),
+                    );
                 const finalFilename = ensureFilenameExtension(
                     filenameFromHeader || filename,
                     normalizedUrl,
@@ -257,7 +259,7 @@ export async function triggerResourceDownload(
 }
 
 export function buildErrorReportMailto(sub: string) {
-    const subject = '[SMU eCampus] 오류 제보';
+    const subject = '[eHelper] 오류 제보';
     const body = [
         '안녕하세요. 오류를 제보합니다.',
         '',
@@ -274,8 +276,7 @@ export function buildErrorReportMailto(sub: string) {
 export function typeBadgeClass(type: ItemType) {
     if (type === 'ASSIGNMENT')
         return 'bg-rose-50 text-rose-500 ring-1 ring-rose-100';
-    if (type === 'LECTURE')
-        return 'bg-sky-50 text-sky-500 ring-1 ring-sky-100';
+    if (type === 'LECTURE') return 'bg-sky-50 text-sky-500 ring-1 ring-sky-100';
     if (type === 'FORUM')
         return 'bg-amber-50 text-amber-500 ring-1 ring-amber-100';
     if (type === 'RESOURCE')
@@ -365,7 +366,10 @@ export function collectCourseNames(
     items: DashboardItem[],
     includeSmClass: boolean,
 ) {
-    const visibleCachedCourses = getVisibleCachedCourses(runtime, includeSmClass);
+    const visibleCachedCourses = getVisibleCachedCourses(
+        runtime,
+        includeSmClass,
+    );
 
     return [
         ...new Set(
@@ -384,7 +388,10 @@ export function collectNewCourseNames(
     items: DashboardItem[],
     includeSmClass: boolean,
 ) {
-    const visibleCachedCourses = getVisibleCachedCourses(runtime, includeSmClass);
+    const visibleCachedCourses = getVisibleCachedCourses(
+        runtime,
+        includeSmClass,
+    );
 
     return [
         ...new Set(
@@ -415,7 +422,9 @@ export function selectFilteredItems(state: UiState) {
     const in3days = now + 3 * 24 * 60 * 60 * 1000;
     const normalizedCourseFilter = normalizeCourseName(state.courseFilter);
     const selectedFilters = Array.isArray(state.filter) ? state.filter : [];
-    const selectedTypes = Array.isArray(state.typeFilter) ? state.typeFilter : [];
+    const selectedTypes = Array.isArray(state.typeFilter)
+        ? state.typeFilter
+        : [];
     const hiddenItemIdSet = new Set(
         Array.isArray(state.hiddenItemIds) ? state.hiddenItemIds : [],
     );
